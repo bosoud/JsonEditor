@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>محرر JSON</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh;
+            direction: rtl; /* تحويل الصفحة إلى RTL */
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9; /* خلفية خفيفة */
+            box-sizing: border-box;
+        }
+        #tree-container {
+            width: 20%; /* عرض الشجرة */
+            border-left: 2px solid #ddd;
+            padding: 15px;
+            background-color: #fff;
+            overflow-y: auto;
+            box-shadow: 3px 0 8px rgba(0, 0, 0, 0.1); /* إضافة ظل */
+            box-sizing: border-box;
+        }
+        #editor-container {
+            width: 80%; /* توسيع عرض المحرر */
+            padding: 20px;
+            background-color: #fafafa; /* خلفية المحرر */
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        h3 {
+            font-size: 24px;
+            color: #333;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            cursor: pointer;
+            margin: 8px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            transition: background-color 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-direction: column; /* ترتيب العمود */
+        }
+        li:hover {
+            background-color: #c8e6c9; /* لون عند التحريك */
+        }
+        .selected {
+            background-color: #81c784 !important; /* لون التظليل */
+            border-color: #4caf50;
+        }
+        .editor-box {
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 150px; /* ارتفاع صندوق التحرير */
+            padding: 15px;
+            font-size: 18px; /* حجم الخط */
+            background-color: #fff;
+            color: #333;
+            line-height: 1.6;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+            white-space: pre-wrap;
+            resize: none;
+            transition: box-shadow 0.3s ease;
+        }
+        textarea:focus {
+            outline: none;
+            box-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+            border-color: #4caf50;
+        }
+        label {
+            font-weight: bold;
+            font-size: 16px; /* حجم الخط في العناوين */
+            margin-bottom: 10px;
+            color: #555;
+        }
+        .key-title {
+            font-size: 14px; /* حجم الخط لأسماء العناصر */
+            color: #555;
+        }
+        .index-number {
+            font-size: 16px; /* حجم أكبر للفهرس */
+            font-weight: bold;
+            color: #333;
+        }
+        button {
+            background-color: #4caf50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #388e3c;
+        }
+        button:active {
+            background-color: #2e7d32;
+        }
+        #downloadLink {
+            display: block;
+            margin-top: 20px;
+            color: #388e3c;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        #downloadLink:hover {
+            text-decoration: underline;
+        }
+        .message {
+            margin-top: 20px;
+            font-size: 16px;
+            color: green;
+            display: none; /* سيتم إظهار الرسالة ديناميكيًا */
+        }
+
+    </style>
+</head>
+<body>   
+    <div id="tree-container">
+        <h3>شجرة JSON</h3>
+        <input type="file" id="fileInput" accept=".json"><br><br>
+        <ul id="jsonTree"></ul>
+    </div>
+
+    <div id="editor-container">
+        <h3>المحرر</h3>
+        <div id="jsonEditorContainer"></div>
+        <br><br>
+        <button id="saveButton">حفظ التعديلات</button>
+        <a id="downloadLink" style="display:none;">Download Updated JSON</a>
+        <br><br>
+        <button id="copyButton">نسخ كل JSON</button>
+        <p id="messageBox" class="message"></p> <!-- عنصر لعرض الرسالة -->
+    </div>
+
+    <script>
+        let jsonData = {}; // تخزين JSON المحمّل
+        let selectedKey = null;
+        let lastSelectedLi = null; // لتخزين العنصر المحدد الأخير
+
+        // تحديد العناصر
+        const jsonTree = document.getElementById('jsonTree');
+        const jsonEditorContainer = document.getElementById('jsonEditorContainer');
+        const saveButton = document.getElementById('saveButton');
+        const fileInput = document.getElementById('fileInput');
+        const downloadLink = document.getElementById('downloadLink');
+        const copyButton = document.getElementById('copyButton');
+        const messageBox = document.getElementById('messageBox'); // تحديد عنصر الرسالة
+
+        // بناء الشجرة
+        function buildTree(data, parentElement) { 
+            parentElement.innerHTML = ''; // مسح الشجرة السابقة
+            let index = 1; // بدء الفهرس من 1
+            for (const key in data) {
+                const li = document.createElement('li');
+                const indexSpan = document.createElement('span');
+                const keyTitleSpan = document.createElement('span');
+                const valueSpan = document.createElement('span'); // عنصر جديد لعرض القيمة
+                
+                let valueText;
+                let description;
+                if (typeof data[key] === 'object') {
+                    description = data[key].ArticleDescription;
+                    // إذا كان الوصف أطول من 50 حرف، نقوم بقصه وإضافة "..."
+                    if (description.length > 50) {
+                        description = description.substring(0, 50) + '...';
+                    }
+                    valueText = `${data[key].ArticleTitle}`;
+                } else {
+                    valueText = data[key];
+                }
+
+                indexSpan.classList.add('index-number');
+                indexSpan.textContent = `${index}. ${valueText}`;
+                valueSpan.classList.add('value'); // إضافة كلاس للقيمة
+                valueSpan.textContent = `الوصف: ${description}`; // عرض القيمة بجانب المفتاح
+
+                li.appendChild(indexSpan);
+                li.appendChild(keyTitleSpan);
+                li.appendChild(valueSpan); // إضافة العنصر الخاص بالقيمة
+
+                li.addEventListener('click', () => {
+                    selectedKey = key; // تحديث المفتاح المختار
+                    selectListItem(li); // تطبيق التظليل
+                    displayJsonEditor(data[key], key); // عرض المحتوى في صناديق منفصلة
+                });
+
+                parentElement.appendChild(li);
+                index++; // زيادة الفهرس
+            }
+        }
+
+        // تطبيق التظليل على العنصر المحدد
+        function selectListItem(li) {
+            if (lastSelectedLi) {
+                lastSelectedLi.classList.remove('selected'); // إزالة التظليل من العنصر السابق
+            }
+            li.classList.add('selected'); // تطبيق التظليل على العنصر الجديد
+            lastSelectedLi = li; // تحديث العنصر المحدد الأخير
+        }
+
+        // عرض المحرر الخاص بكل عنصر في صندوق مستقل
+        function displayJsonEditor(data, key) {
+            jsonEditorContainer.innerHTML = ''; // مسح المحررات السابقة
+            for (const subKey in data) {
+                const editorBox = document.createElement('div');
+                editorBox.classList.add('editor-box');
+
+                // إضافة اسم المفتاح داخل المحرر
+                const label = document.createElement('label');
+                label.textContent = subKey;
+
+                // إنشاء صندوق تحرير لكل قيمة
+                const textarea = document.createElement('textarea');
+                textarea.value = data[subKey]; // عرض النص مباشرة بدون تنسيق JSON ليبقى النص بسيطاً
+                textarea.dataset.key = subKey; // ربط كل textarea بمفتاحه الخاص
+
+                // إضافة قائمة منسدلة لتحديد نوع البيانات
+                const typeSelect = document.createElement('select');
+                typeSelect.innerHTML = `
+                    <option value="string" ${typeof data[subKey] === 'string' ? 'selected' : ''}>نص</option>
+                    <option value="number" ${typeof data[subKey] === 'number' ? 'selected' : ''}>رقم</option>
+                `;
+                typeSelect.dataset.key = subKey;
+
+                editorBox.appendChild(label); // إضافة اسم المفتاح فوق صندوق التحرير
+                editorBox.appendChild(textarea);
+                editorBox.appendChild(typeSelect); // إضافة قائمة نوع البيانات
+                jsonEditorContainer.appendChild(editorBox);
+            }
+        }
+
+        // تحميل الملف
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file && file.type === "application/json") {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        jsonData = JSON.parse(e.target.result); // تحليل JSON
+                        buildTree(jsonData, jsonTree); // بناء الشجرة
+                    } catch (error) {
+                        showMessage("صيغة JSON غير صالحة!", "red");
+                    }
+                };
+                reader.readAsText(file);
+            } else {
+                showMessage("يرجى تحميل ملف JSON صالح.", "red");
+            }
+        });
+
+        // حفظ التعديلات وتنزيل الملف
+        saveButton.addEventListener('click', () => {
+            const textareas = jsonEditorContainer.querySelectorAll('textarea');
+            const typeSelects = jsonEditorContainer.querySelectorAll('select');
+
+            textareas.forEach((textarea, index) => {
+                const key = textarea.dataset.key;
+                const selectedType = typeSelects[index].value;
+                let value = textarea.value;
+
+                // تحويل القيمة بناءً على نوع البيانات المختار
+                if (selectedType === 'number') {
+                    value = Number(value);
+                }
+
+                jsonData[selectedKey][key] = value; // تحديث JSON بالقيمة الجديدة
+            });
+
+            // إنشاء ملف JSON قابل للتنزيل
+            const blob = new Blob([JSON.stringify(jsonData, null, 4)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            downloadLink.href = url;
+            downloadLink.download = "updated_json.json";
+            downloadLink.style.display = 'inline';
+            downloadLink.textContent = 'Download Updated JSON';
+
+            showMessage("تم حفظ التعديلات بنجاح!", "green");
+        });
+
+        // نسخ كل محتوى JSON
+        copyButton.addEventListener('click', () => {
+            const jsonString = JSON.stringify(jsonData, null, 4); // تحويل JSON إلى نص
+            navigator.clipboard.writeText(jsonString).then(() => {
+                showMessage("تم نسخ محتوى JSON بالكامل!", "green");
+            }).catch(err => {
+                showMessage("فشل النسخ: " + err, "red");
+            });
+        });
+
+        // عرض رسالة في الصفحة
+        function showMessage(message, color) {
+            messageBox.textContent = message;
+            messageBox.style.color = color;
+            messageBox.style.display = 'block';
+            setTimeout(() => {
+                messageBox.style.display = 'none'; // إخفاء الرسالة بعد 3 ثواني
+            }, 3000);
+        }
+
+    </script>
+
+</body>
+</html>
